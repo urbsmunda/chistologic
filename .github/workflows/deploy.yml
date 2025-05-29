@@ -13,23 +13,27 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write   # для yc-iam-token-fed
+      id-token: write   # выдача OIDC-джвт для YC
       contents: read
 
     steps:
-      - name: YC OIDC auth
-        id: yc-auth
-        uses: yc-actions/yc-iam-token-fed@v1
+      # 1. Получаем IAM-токен YC через Workload Identity Federation
+      - name: Get Yandex Cloud IAM token
+        id: yc-auth                          # ← тот же id, чтобы не менять ссылки ниже
+        uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
         with:
-          yc-sa-id: ${{ vars.YC_SA_ID }}
-          yc-federation-id: ${{ vars.YC_FEDERATION_ID }}
+          yc-sa-id: ${{ secrets.YC_SA_ID }}          # ID сервис-аккаунта
+          yc-federation-id: ${{ secrets.YC_FEDERATION_ID }} # (если требуется)
 
+      # 2. Клонируем репозиторий
       - uses: actions/checkout@v4
 
+      # 3. Ставим Terraform
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      # 4. terraform init (s3-backend в YC Object Storage)
       - name: Terraform Init
         run: |
           terraform init \
@@ -42,11 +46,13 @@ jobs:
         env:
           YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
 
+      # 5. План
       - name: Terraform Plan
         run: terraform plan -input=false
         env:
           YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
 
+      # 6. Применяем в main
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -input=false -auto-approve
