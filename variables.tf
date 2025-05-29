@@ -62,3 +62,18 @@ variable "telegram_bot_token_kms_secret_id" {
   description = "KMS secret ID that contains the Telegram bot token for alerting"
   type        = string
 }
+
+variable "bucket_name" {
+  description = "Object-Storage bucket for tfstate & monitoring"
+  type        = string
+}
+
+variable "telegram_chat_id" {
+  description = "Chat ID for monitoring alerts"
+  type        = string
+}
+
+variable "k8s_cluster_name" {
+  description = "Name of the YC Managed-Kubernetes cluster"
+  type        = string
+}

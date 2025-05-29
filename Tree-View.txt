@@ -1,0 +1,55 @@
+➜ chistologic git:(main) tree /F
+Folder PATH listing for volume DISK
+Volume serial number is E87A-2358
+C:.
+│   INSTRUCTIONS.md
+│   main.tf
+│   outputs.tf
+│   variables.tf
+│
+├───.github
+│   └───workflows
+│           deploy.yml
+│
+└───modules
+    ├───database
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    ├───dns
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    ├───iam
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    ├───kubernetes
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    ├───monitoring
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    ├───security
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    ├───storage
+    │       main.tf
+    │       outputs.tf
+    │       variables.tf
+    │
+    └───vpc
+            main.tf
+            outputs.tf
+            variables.tf
+
+➜ chistologic git:(main)

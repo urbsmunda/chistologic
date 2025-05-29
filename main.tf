@@ -99,6 +99,10 @@ module "monitoring" {
   telegram_bot_token_kms_secret_id = var.telegram_bot_token_kms_secret_id
   retention_hot_days               = 15
   retention_cold_days              = 365
+  bucket_name                      = var.bucket_name
+  telegram_chat_id                 = var.telegram_chat_id
+  k8s_cluster_name                 = var.k8s_cluster_name
+
 }
 
 module "security" {
