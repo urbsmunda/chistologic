@@ -1,62 +1,41 @@
-name: Terraform Deploy
+name: terraform
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-
-permissions:
-  id-token: write   # GitHub OIDC token for YC
-  contents: read
 
 env:
-  # --- Global settings ---
-  TF_VERSION: "1.5.7"
-  TF_BUCKET: ${{ vars.TF_BUCKET }}          # S3 backend bucket
-  YC_CLOUD_ID:  ${{ vars.YANDEX_CLOUD_ID }}
-  YC_FOLDER_ID: ${{ vars.YANDEX_FOLDER_ID }}
-
-  # --- TF_VAR_ mappings ---
-  TF_VAR_cloud_id:  ${{ vars.YANDEX_CLOUD_ID }}
-  TF_VAR_folder_id: ${{ vars.YANDEX_FOLDER_ID }}
-  TF_VAR_object_storage_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  TF_VAR_object_storage_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  TF_VAR_telegram_bot_token_kms_secret_id: ${{ vars.TELEGRAM_BOT_TOKEN_KMS_SECRET_ID }}
-  TF_VAR_telegram_chat_id: ${{ vars.TELEGRAM_CHAT_ID }}
-  TF_VAR_bucket_name: ${{ vars.TF_BUCKET }}
-  TF_VAR_k8s_cluster_name: ${{ vars.K8S_CLUSTER_NAME }}
-
-concurrency:
-  group: terraform-${{ github.ref }}
-  cancel-in-progress: true
+  TF_VERSION: 1.5.7
+  TF_BUCKET: chistologic-tfstate
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # для yc-iam-token-fed
+      contents: read
+      metadata: read
 
     steps:
       - name: YC OIDC auth
         id: yc-auth
-        uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
+        uses: yc-actions/yc-iam-token-fed@v1
         with:
-          yc-sa-id:        ${{ vars.YC_SA_ID }}
+          yc-sa-id: ${{ vars.YC_SA_ID }}
           yc-federation-id: ${{ vars.YC_FEDERATION_ID }}
 
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="bucket=$TF_BUCKET" \
-            -backend-config="key=${{ github.ref_name }}.tfstate" \
+            -backend-config="bucket=${TF_BUCKET}" \
+            -backend-config="key=${GITHUB_REF_NAME}.tfstate" \
             -backend-config="endpoint=https://storage.yandexcloud.net" \
             -backend-config="region=ru-central1" \
             -backend-config="skip_region_validation=true" \
@@ -70,7 +49,7 @@ jobs:
           YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
 
       - name: Terraform Apply
-        if: success() && (github.ref == 'refs/heads/main') && (github.event_name == 'push')
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -input=false -auto-approve
         env:
           YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
