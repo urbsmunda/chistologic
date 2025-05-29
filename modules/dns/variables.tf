@@ -1,29 +1,15 @@
-### variables.tf ###
+variable "project" {
+  description = "Project prefix for naming"
+  type        = string
+  default     = null
+}
 
-variable "folder_id" {
-  description = "Yandex Cloud Folder ID where the DNS zone will be created"
+variable "environment" {
+  description = "Environment tag (e.g. dev, prod)"
   type        = string
 }
 
 variable "domain" {
-  description = "Root domain name to manage (e.g. example.com)"
+  description = "Root DNS zone, e.g. example.com"
   type        = string
-}
-
-variable "vpc_id" {
-  description = "ID of the VPC network (for private DNS zone); if empty, the zone will be public"
-  type        = string
-  default     = ""
-}
-
-variable "environment" {
-  description = "Deployment environment tag (dev, stage, prod, …) used in resource names"
-  type        = string
-  default     = "prod"
-}
-
-variable "ttl" {
-  description = "Default TTL for DNS records (seconds)"
-  type        = number
-  default     = 300
 }

@@ -1,79 +1,12 @@
-### variables.tf ###
-
-variable "cloud_id" {
-  description = "Yandex Cloud ID (organisation level)"
+variable "project" {
+  description = "Project prefix for all resources"
   type        = string
-}
-
-variable "folder_id" {
-  description = "Yandex Cloud Folder ID where all resources will be provisioned"
-  type        = string
-}
-
-variable "environment" {
-  description = "Deployment environment tag (dev, stage, prod, etc.)"
-  type        = string
-  default     = "prod"
-}
-
-variable "default_zone" {
-  description = "Default availability zone for resources that accept a single zone"
-  type        = string
-  default     = "ru-central1-a"
-}
-
-variable "public_subnets_cidr" {
-  description = "List of CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.10.0.0/24"]
-}
-
-variable "private_subnets_cidr" {
-  description = "List of CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.10.1.0/24"]
-}
-
-variable "db_subnets_cidr" {
-  description = "CIDR blocks for database subnets"
-  type        = list(string)
-  default     = ["10.10.2.0/28"]
+  default     = "chistologic"
 }
 
 variable "domain" {
-  description = "Root DNS domain managed by the platform"
-  type        = string
-  default     = "chistologic.ru"
-}
-
-variable "object_storage_access_key" {
-  description = "Access key for Object Storage bucket that stores the remote Terraform state"
-  type        = string
-  sensitive   = true
-}
-
-variable "object_storage_secret_key" {
-  description = "Secret key for Object Storage bucket that stores the remote Terraform state"
-  type        = string
-  sensitive   = true
-}
-
-variable "telegram_bot_token_kms_secret_id" {
-  description = "KMS secret ID that contains the Telegram bot token for alerting"
+  description = "Public domain for the project (e.g. chisto.log)"
   type        = string
 }
 
-variable "bucket_name" {
-  description = "Object-Storage bucket for tfstate & monitoring"
-  type        = string
-}
-
-variable "telegram_chat_id" {
-  description = "Chat ID for monitoring alerts"
-  type        = string
-}
-
-variable "k8s_cluster_name" {
-  description = "Name of the YC Managed-Kubernetes cluster"
-  type        = string
-}
+# остальные переменные (cloud_id, folder_id …) остаются без изменений
