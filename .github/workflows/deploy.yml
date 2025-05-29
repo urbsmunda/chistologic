@@ -5,9 +5,10 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 permissions:
-  id-token: write   # OIDC-token from GitHub
+  id-token: write   # выдаём OIDC‑токен для YC
   contents: read
 
 concurrency:
@@ -16,47 +17,51 @@ concurrency:
 
 env:
   TF_VERSION: "1.5.7"
-  TF_BUCKET:  "chistologic-tfstate"     # имя S3‑бакета с state
-  YC_CLOUD_ID:  ${{ secrets.YANDEX_CLOUD_ID }}
-  YC_FOLDER_ID: ${{ secrets.YANDEX_FOLDER_ID }}
+  TF_BUCKET:  ${{ vars.TF_BUCKET }}        # имя бакета из Repository Variables
+  YC_CLOUD_ID:  ${{ vars.YANDEX_CLOUD_ID }}
+  YC_FOLDER_ID: ${{ vars.YANDEX_FOLDER_ID }}
 
 jobs:
   terraform:
     runs-on: ubuntu-24.04
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Terraform ${{ env.TF_VERSION }}
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: ${{ env.TF_VERSION }}
-
-    # ---------------- OIDC‑аутентификация в Yandex Cloud -----------------
+    # Получаем краткоживущий IAM‑токен без JSON‑ключей
     - name: YC OIDC auth
       id: yc-auth
       uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
       with:
-        yc-sa-id:        ${{ vars.YC_SA_ID }}          # ajeqqgdnr35kvd9ik9h4
-        yc-federation-id: ${{ vars.YC_FEDERATION_ID }}  # ajeilhvvaqck9uncqplp
+        yc-sa-id:        ${{ vars.YC_SA_ID }}
+        yc-federation-id: ${{ vars.YC_FEDERATION_ID }}
 
-    # Пробрасываем YC_TOKEN во все последующие shell‑команды
-    - name: Export YC_TOKEN
-      run: echo "YC_TOKEN=${{ steps.yc-auth.outputs.token }}" >> $GITHUB_ENV
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
 
-    # ---------------- Terraform Init/Plan (+ Apply на main) -------------
     - name: Terraform Init
+      env:
+        YC_TOKEN:              ${{ steps.yc-auth.outputs.token }}
+        AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
-        terraform init -input=false \
-          -backend-config="bucket=${{ env.TF_BUCKET }}" \
+        terraform -chdir=terraform init \
+          -backend-config="bucket=${TF_BUCKET}" \
           -backend-config="key=${{ github.ref_name }}.tfstate" \
-          -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID }}" \
-          -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          -backend-config="endpoint=https://storage.yandexcloud.net" \
+          -backend-config="region=ru-central1" \
+          -backend-config="skip_region_validation=true" \
+          -backend-config="skip_credentials_validation=true"
 
     - name: Terraform Plan
-      run: terraform plan -input=false -out=tfplan
+      env:
+        YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
+      run: terraform -chdir=terraform plan -input=false
 
-    - name: Terraform Apply (main only)
+    - name: Terraform Apply
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: terraform apply -input=false -auto-approve tfplan
+      env:
+        YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
+      run: terraform -chdir=terraform apply -auto-approve -input=false
