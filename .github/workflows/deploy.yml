@@ -39,7 +39,7 @@ jobs:
       uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
       with:
         yc-sa-id:        ${{ vars.YC_SA_ID }}          # ajeqqgdnr35kvd9ik9h4
-        yc-federation-id:${{ vars.YC_FEDERATION_ID }}  # ajeilhvvaqck9uncqplp
+        yc-federation-id: ${{ vars.YC_FEDERATION_ID }}  # ajeilhvvaqck9uncqplp
 
     # Пробрасываем YC_TOKEN во все последующие shell‑команды
     - name: Export YC_TOKEN
