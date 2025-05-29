@@ -5,9 +5,10 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 permissions:
-  id-token: write          # OIDC-токен для YC
+  id-token: write       # для OIDC-токена GitHub
   contents: read
 
 concurrency:
@@ -15,117 +16,55 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TF_VERSION: 1.5.7
-  YC_CLOUD_ID:  ${{ secrets.YANDEX_CLOUD_ID }}
-  YC_FOLDER_ID: ${{ secrets.YANDEX_FOLDER_ID }}
-  TF_BUCKET:    chistologic-tfstate
-  TF_STATE_KEY: ${{ github.ref == 'refs/heads/main' && 'prod/terraform.tfstate' || 'pr/terraform-${{ github.head_ref }}.tfstate' }}
+  TF_VERSION: "1.5.7"
+  TF_BUCKET: ${{ vars.TF_BUCKET }}          # chistologic-tfstate
+  YC_CLOUD_ID:  ${{ vars.YANDEX_CLOUD_ID }} # Cloud‑id из Variables
+  YC_FOLDER_ID: ${{ vars.YANDEX_FOLDER_ID }}
 
 jobs:
-# ──────────────────────────────────────────────────────────────────────────────
-  fmt-validate:
-    name: Fmt & Validate
-    runs-on: ubuntu-latest
+  terraform:
+    runs-on: ubuntu-24.04
     defaults:
       run:
         shell: bash
-        working-directory: terraform
+
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+    - name: YC OIDC auth
+      id: yc-auth
+      uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
+      with:
+        yc-sa-id:        ${{ vars.YC_SA_ID }}
+        yc-federation-id:${{ vars.YC_FEDERATION_ID }}
 
-      - name: YC-OIDC Auth
-        uses: yandex-cloud/actions/yc-auth@v0
-        with:
-          oidc_token: ${{ secrets.GITHUB_TOKEN }}
-          cloud_id:   ${{ env.YC_CLOUD_ID }}
-          folder_id:  ${{ env.YC_FOLDER_ID }}
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Init (no backend)
-        run: terraform init -backend=false
+    - name: Terraform Init
+      env:
+        YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
+        AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        terraform init \
+          -backend-config="bucket=$TF_BUCKET" \
+          -backend-config="key=${{ github.ref_name }}.tfstate" \
+          -backend-config="endpoint=https://storage.yandexcloud.net" \
+          -backend-config="region=ru-central1" \
+          -backend-config="skip_region_validation=true" \
+          -backend-config="skip_credentials_validation=true"
 
-      - run: terraform fmt -check
-      - run: terraform validate
+    - name: Terraform Plan
+      if: success()
+      env:
+        YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
+      run: terraform plan -input=false
 
-# ──────────────────────────────────────────────────────────────────────────────
-  plan:
-    name: Plan
-    needs: fmt-validate
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: terraform
-    outputs:
-      has-changes: ${{ steps.plan.outputs.has-changes }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: YC-OIDC Auth
-        uses: yandex-cloud/actions/yc-auth@v0
-        with:
-          oidc_token: ${{ secrets.GITHUB_TOKEN }}
-          cloud_id:   ${{ env.YC_CLOUD_ID }}
-          folder_id:  ${{ env.YC_FOLDER_ID }}
-
-      - name: Terraform Init (remote backend)
-        run: |
-          terraform init -reconfigure \
-            -backend-config="bucket=${TF_BUCKET}" \
-            -backend-config="key=${TF_STATE_KEY}" \
-            -backend-config="endpoint=storage.yandexcloud.net" \
-            -backend-config="region=ru-central1" \
-            -backend-config="skip_region_validation=true" \
-            -backend-config="skip_credentials_validation=true"
-
-      - id: plan
-        name: Terraform Plan
-        run: |
-          terraform plan -detailed-exitcode \
-            -out=tfplan.bin \
-            -var cloud_id=$YC_CLOUD_ID \
-            -var folder_id=$YC_FOLDER_ID || true
-          echo "has-changes=$([ $? -eq 2 ] && echo true || echo false)" >> $GITHUB_OUTPUT
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tfplan
-          path: terraform/tfplan.bin
-          retention-days: 7
-
-# ──────────────────────────────────────────────────────────────────────────────
-  apply:
-    name: Apply (prod only)
-    needs: plan
-    if: needs.plan.outputs.has-changes == 'true' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: terraform
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: YC-OIDC Auth
-        uses: yandex-cloud/actions/yc-auth@v0
-        with:
-          oidc_token: ${{ secrets.GITHUB_TOKEN }}
-          cloud_id:   ${{ env.YC_CLOUD_ID }}
-          folder_id:  ${{ env.YC_FOLDER_ID }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: tfplan
-          path: terraform
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan.bin
+    - name: Terraform Apply
+      if: success() && (github.ref == 'refs/heads/main') && (github.event_name == 'push')
+      env:
+        YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
+      run: terraform apply -auto-approve -input=false
