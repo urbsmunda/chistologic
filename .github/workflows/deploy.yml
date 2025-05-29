@@ -15,7 +15,6 @@ jobs:
     permissions:
       id-token: write   # для yc-iam-token-fed
       contents: read
-      metadata: read
 
     steps:
       - name: YC OIDC auth
