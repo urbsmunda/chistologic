@@ -6,17 +6,31 @@ on:
   pull_request:
 
 env:
+  # общие
   TF_VERSION: 1.5.7
   TF_BUCKET: ${{ vars.TF_BUCKET }}
+
+  # переменные, которые Terraform ждёт как input
+  TF_VAR_cloud_id:  ${{ vars.YANDEX_CLOUD_ID }}
+  TF_VAR_folder_id: ${{ vars.YANDEX_FOLDER_ID }}
+
+  TF_VAR_bucket_name:  ${{ vars.TF_BUCKET }}
+  TF_VAR_telegram_chat_id: ${{ vars.TELEGRAM_CHAT_ID }}
+  TF_VAR_k8s_cluster_name: ${{ vars.K8S_CLUSTER_NAME }}
+
+  TF_VAR_object_storage_access_key:  ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_object_storage_secret_key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  TF_VAR_telegram_bot_token_kms_secret_id: ${{ secrets.TELEGRAM_BOT_TOKEN_KMS_SECRET_ID }}
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      id-token: write     # для OIDC-аутентификации в YC
       contents: read
 
     steps:
+      # 1. IAM-токен YC через Workload Identity Federation
       - name: Get Yandex Cloud IAM token
         id: yc-auth
         uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
@@ -24,12 +38,15 @@ jobs:
           yc-sa-id:        ${{ vars.YC_SA_ID }}
           yc-federation-id: ${{ vars.YC_FEDERATION_ID }}
 
+      # 2. Checkout
       - uses: actions/checkout@v4
 
+      # 3. Terraform CLI
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      # 4. terraform init
       - name: Terraform Init
         run: |
           terraform init \
@@ -42,11 +59,13 @@ jobs:
         env:
           YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
 
+      # 5. План
       - name: Terraform Plan
         run: terraform plan -input=false
         env:
           YC_TOKEN: ${{ steps.yc-auth.outputs.token }}
 
+      # 6. Применяем в main
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -input=false -auto-approve
